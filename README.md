@@ -34,6 +34,13 @@ wypełniające formularze łamią regulaminy (np. Vinted banuje za to konta). Dl
   (zakładka *Actions* → ostatni build → artefakt `ListOnce-debug-apk`).
 - **Lokalnie:** otwórz folder w Android Studio i uruchom `app`.
 
+APK jest podpisany stałym kluczem z sekretów repo (`SIGNING_KEYSTORE_BASE64`, `SIGNING_PASSWORD`),
+więc nowe wersje instalują się na starsze. Każde wypchnięcie na `main` publikuje `IzzyListOnce.apk`
+w zakładce **Releases**.
+
+**Klucz podpisu:** kopia leży lokalnie w folderze `signing/` (wykluczony z gita). Nie usuwaj go —
+bez tego klucza nie da się wydać aktualizacji; trzeba by odinstalować aplikację i zainstalować od nowa.
+
 Wymagania: Android 10+ (minSdk 29).
 
 ## Dalsze plany
