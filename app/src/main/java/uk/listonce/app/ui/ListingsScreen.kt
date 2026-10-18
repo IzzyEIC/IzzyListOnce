@@ -121,7 +121,7 @@ private fun ListingRow(vm: AppViewModel, listing: Listing, onClick: () -> Unit) 
                     listing.isSold && listing.stillLive.isNotEmpty() ->
                         "SPRZEDANE — usuń jeszcze z: " + listing.stillLive.joinToString { it.label }
                     listing.isSold -> "SPRZEDANE ✓"
-                    else -> "Wystawione: $posted / ${listing.targets.size}"
+                    else -> "Wystawione: $posted / ${listing.targets.count { it.active }}"
                 }
                 Text(
                     status,

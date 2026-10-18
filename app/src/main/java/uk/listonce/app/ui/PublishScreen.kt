@@ -110,7 +110,7 @@ fun PublishScreen(
                 }
             }
 
-            val targets = listing.targets.sortedBy { it.ordinal }
+            val targets = listing.targets.filter { it.active }.sortedBy { it.ordinal }
             items(targets, key = { it.name }) { platform ->
                 PlatformCard(
                     vm, listing, settings, platform,
@@ -122,7 +122,8 @@ fun PublishScreen(
                 )
             }
 
-            if (!listing.isSold && listing.targets.none { it.group == PlatformGroup.FREE }) {
+            val freeActive = Platform.entries.any { it.group == PlatformGroup.FREE && it.active }
+            if (freeActive && !listing.isSold && listing.targets.none { it.group == PlatformGroup.FREE }) {
                 item {
                     OutlinedButton(onClick = { vm.giveAway(listing.id) }, modifier = Modifier.fillMaxWidth()) {
                         Text("Nie sprzedało się? Oddaj za darmo (Freegle, Freecycle, Olio)")

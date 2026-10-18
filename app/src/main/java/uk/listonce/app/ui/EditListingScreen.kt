@@ -74,7 +74,10 @@ fun EditListingScreen(
     var draft by remember {
         mutableStateOf(
             listingId?.let { vm.store.listing(it) }
-                ?: Listing(area = vm.settings.value.defaultArea),
+                ?: Listing(
+                    area = vm.settings.value.defaultArea,
+                    targets = Platform.entries.filter { it.active }.toSet(),
+                ),
         )
     }
     var pendingCamera by rememberSaveable { mutableStateOf<String?>(null) }
@@ -94,7 +97,7 @@ fun EditListingScreen(
     }
 
     val canSave = draft.title.isNotBlank() && (draft.free || draft.price.isNotBlank()) &&
-        draft.targets.isNotEmpty()
+        draft.targets.any { it.active }
 
     Scaffold(
         topBar = {
@@ -233,22 +236,32 @@ fun EditListingScreen(
             SectionTitle("Gdzie wystawić?")
             PlatformGroup.entries.forEach { group ->
                 val inGroup = Platform.entries.filter { it.group == group }
+                val activeInGroup = inGroup.filter { it.active }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(group.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                    TextButton(onClick = {
-                        val all = draft.targets.containsAll(inGroup)
-                        draft = draft.copy(targets = if (all) draft.targets - inGroup.toSet() else draft.targets + inGroup)
-                    }) { Text(if (draft.targets.containsAll(inGroup)) "Odznacz" else "Wszystkie") }
+                    if (activeInGroup.size > 1) {
+                        TextButton(onClick = {
+                            val all = draft.targets.containsAll(activeInGroup)
+                            draft = draft.copy(
+                                targets = if (all) draft.targets - activeInGroup.toSet() else draft.targets + activeInGroup,
+                            )
+                        }) { Text(if (draft.targets.containsAll(activeInGroup)) "Odznacz" else "Wszystkie") }
+                    }
                 }
                 inGroup.forEach { p ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
-                            checked = p in draft.targets,
+                            checked = p.active && p in draft.targets,
+                            enabled = p.active,
                             onCheckedChange = { on ->
                                 draft = draft.copy(targets = if (on) draft.targets + p else draft.targets - p)
                             },
                         )
-                        Text(p.label)
+                        Text(
+                            p.label + if (p.active) "" else "  · wkrótce",
+                            color = if (p.active) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        )
                     }
                 }
             }
@@ -257,7 +270,7 @@ fun EditListingScreen(
                 enabled = canSave,
                 onClick = { vm.save(draft); onSaved(draft.id) },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Zapisz i wystaw (${draft.targets.size})") }
+            ) { Text("Zapisz i wystaw (${draft.targets.count { it.active }})") }
             if (!canSave) {
                 Text(
                     "Uzupełnij tytuł, cenę i wybierz co najmniej jeden portal.",

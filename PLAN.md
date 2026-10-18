@@ -14,8 +14,16 @@ Rynek: **UK**. Tryb bazowy: półautomatyczny (aplikacja przygotowuje treść, u
 - „Połącz z eBay” w Ustawieniach; konfiguracja: zasady (wysyłka/płatność/zwroty), lokalizacja.
 - Wystawienie jednym przyciskiem: zdjęcia → kategoria (podpowiedzi eBay) → stan (dozwolone w kategorii)
   → wymagane cechy (marka, rozmiar…) → cena → publikacja → link do aukcji.
-- Sprzedaż na innym portalu → automatyczne zakończenie oferty na eBay.
-- Sprzedaż na eBay → automatyczne wykrycie i przypomnienie o pozostałych portalach.
+- Sprzedaż na eBay → ListOnce wykrywa ją automatycznie.
+
+### Zasada dla wszystkich portali: sprzedane = zdjęte wszędzie, automatycznie
+Gdy przedmiot sprzeda się na dowolnym podłączonym portalu, ListOnce **sama usuwa/kończy
+ogłoszenie na wszystkich pozostałych podłączonych portalach** — bez przypominania i bez klikania.
+Przypomnienie „usuń ręcznie” zostaje tylko dla portali, których nie da się podłączyć (np. Vinted).
+
+### Kolejność włączania portali
+W aplikacji aktywny jest na razie **tylko eBay**. Pozostałe portale są widoczne jako „wkrótce”
+i włączamy je **po jednym** — każdy dopisujemy razem i testujemy, zanim przejdziemy do następnego.
 - Testy w eBay Sandbox, potem produkcja.
 
 **Wymaga od właścicielki:** konto eBay Developer (App ID, Cert ID, RuName), konto Cloudflare,

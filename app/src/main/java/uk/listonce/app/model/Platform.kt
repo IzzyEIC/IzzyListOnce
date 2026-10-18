@@ -19,11 +19,17 @@ enum class Platform(
     val createUrl: String,
     val titleMax: Int? = null,
     val tip: String = "",
+    /**
+     * Portals are switched on one at a time, each after it has been built and tested
+     * together (see PLAN.md). Inactive ones show as "wkrótce" and can't be picked.
+     */
+    val active: Boolean = false,
 ) {
     EBAY(
         "eBay", PlatformGroup.SELL, "com.ebay.mobile",
         "https://www.ebay.co.uk/sl/sell", titleMax = 80,
         tip = "Tytuł max 80 znaków. Wybierz 'Buy it now' albo aukcję.",
+        active = true,
     ),
     VINTED(
         "Vinted", PlatformGroup.SELL, "fr.vinted",
