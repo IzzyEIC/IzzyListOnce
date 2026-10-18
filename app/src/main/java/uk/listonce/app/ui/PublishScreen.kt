@@ -53,7 +53,13 @@ import uk.listonce.app.publish.AdText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PublishScreen(vm: AppViewModel, listingId: String, onBack: () -> Unit, onEdit: () -> Unit) {
+fun PublishScreen(
+    vm: AppViewModel,
+    listingId: String,
+    onBack: () -> Unit,
+    onEdit: () -> Unit,
+    onEbay: () -> Unit,
+) {
     val listings by vm.listings.collectAsState()
     val settings by vm.settings.collectAsState()
     val listing = listings.firstOrNull { it.id == listingId }
@@ -106,7 +112,14 @@ fun PublishScreen(vm: AppViewModel, listingId: String, onBack: () -> Unit, onEdi
 
             val targets = listing.targets.sortedBy { it.ordinal }
             items(targets, key = { it.name }) { platform ->
-                PlatformCard(vm, listing, settings, platform, onSold = { soldOn = platform })
+                PlatformCard(
+                    vm, listing, settings, platform,
+                    onSold = {
+                        vm.setState(listing.id, platform, PostState.SOLD)
+                        soldOn = platform
+                    },
+                    onEbay = onEbay,
+                )
             }
 
             if (!listing.isSold && listing.targets.none { it.group == PlatformGroup.FREE }) {
@@ -144,6 +157,7 @@ private fun PlatformCard(
     settings: Settings,
     platform: Platform,
     onSold: () -> Unit,
+    onEbay: () -> Unit,
 ) {
     val launcher = vm.launcher
     val state = listing.posts[platform]
@@ -168,6 +182,17 @@ private fun PlatformCard(
             }
             if (platform.tip.isNotBlank()) {
                 Text(platform.tip, style = MaterialTheme.typography.bodySmall)
+            }
+
+            // eBay connected through the API: one button does everything.
+            if (platform == Platform.EBAY && settings.ebay.ready) {
+                Button(onClick = onEbay, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (listing.ebay.isLive) "Ogłoszenie na eBay — szczegóły" else "Wystaw automatycznie na eBay")
+                }
+                if (state == PostState.POSTED) {
+                    OutlinedButton(onClick = onSold) { Text("Sprzedane tutaj") }
+                }
+                return@Column
             }
 
             // Step 1: open
@@ -234,7 +259,7 @@ private fun PlatformCard(
                         Text("Oznacz: wystawione")
                     }
                     PostState.POSTED -> {
-                        Button(onClick = { vm.setState(listing.id, platform, PostState.SOLD); onSold() }) {
+                        Button(onClick = onSold) {
                             Text("Sprzedane tutaj")
                         }
                         OutlinedButton(onClick = { vm.setState(listing.id, platform, PostState.REMOVED) }) {
@@ -264,8 +289,13 @@ private fun SoldDialog(vm: AppViewModel, listing: Listing, soldOn: Platform, onD
                     live.forEach { p ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(p.label, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { vm.launcher.open(p) }) { Text("Otwórz") }
-                            TextButton(onClick = { vm.setState(listing.id, p, PostState.REMOVED) }) { Text("Usunięte ✓") }
+                            if (p == Platform.EBAY && listing.ebay.isLive) {
+                                // Listed through the API — ListOnce can end it itself.
+                                TextButton(onClick = { vm.endOnEbay(listing.id) }) { Text("Zakończ automatycznie") }
+                            } else {
+                                TextButton(onClick = { vm.launcher.open(p) }) { Text("Otwórz") }
+                                TextButton(onClick = { vm.setState(listing.id, p, PostState.REMOVED) }) { Text("Usunięte ✓") }
+                            }
                         }
                     }
                 }

@@ -1,0 +1,14 @@
+name = "listonce-ebay"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+# "sandbox" do testów, "production" na prawdziwym eBay.
+EBAY_ENV = "sandbox"
+# Uzupełnij z developer.ebay.com → Application Keys (App ID / Client ID).
+EBAY_CLIENT_ID = ""
+# RuName z developer.ebay.com → User Tokens → "Get a Token from eBay via Your Application".
+EBAY_RUNAME = ""
+
+# Sekret (Cert ID / Client Secret) NIE wpisujemy tutaj — ustawia się go poleceniem:
+#   npx wrangler secret put EBAY_CLIENT_SECRET

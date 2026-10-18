@@ -43,6 +43,7 @@ data class Listing(
     val photos: List<String> = emptyList(),
     val targets: Set<Platform> = emptySet(),
     val posts: Map<Platform, PostState> = emptyMap(),
+    val ebay: EbayListing = EbayListing(),
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     val isSold: Boolean get() = posts.values.any { it == PostState.SOLD }
@@ -60,4 +61,43 @@ data class Settings(
     val defaultArea: String = "",
     val fbGroups: List<FbGroup> = emptyList(),
     val signature: String = "",
+    /** Adres serwera ListOnce (Cloudflare Worker), np. https://listonce-ebay.xyz.workers.dev */
+    val serverUrl: String = "",
+    val ebay: EbayAccount = EbayAccount(),
 )
+
+/** eBay-specific choices for one listing, plus the ids eBay gave it once published. */
+@Serializable
+data class EbayListing(
+    val categoryId: String = "",
+    val categoryName: String = "",
+    /** eBay ConditionEnum, e.g. USED_EXCELLENT. */
+    val condition: String = "",
+    val aspects: Map<String, List<String>> = emptyMap(),
+    val sku: String = "",
+    val offerId: String = "",
+    val listingId: String = "",
+) {
+    val isLive: Boolean get() = listingId.isNotEmpty()
+}
+
+@Serializable
+data class EbayAccount(
+    /** "sandbox" or "production" — reported by the server at connect time. */
+    val env: String = "",
+    val accessToken: String = "",
+    val accessExpiresAt: Long = 0,
+    val refreshToken: String = "",
+    val refreshExpiresAt: Long = 0,
+    val userName: String = "",
+    val fulfillmentPolicyId: String = "",
+    val paymentPolicyId: String = "",
+    val returnPolicyId: String = "",
+    val locationKey: String = "",
+    val postcode: String = "",
+) {
+    val connected: Boolean get() = refreshToken.isNotEmpty()
+    val ready: Boolean
+        get() = connected && fulfillmentPolicyId.isNotEmpty() && paymentPolicyId.isNotEmpty() &&
+            returnPolicyId.isNotEmpty() && locationKey.isNotEmpty()
+}

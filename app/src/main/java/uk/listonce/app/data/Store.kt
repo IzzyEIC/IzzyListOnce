@@ -50,9 +50,14 @@ class Store(private val context: Context) {
 
     fun listing(id: String): Listing? = _listings.value.firstOrNull { it.id == id }
 
+    /** New listings go to the top; existing ones are updated in place. */
     suspend fun upsert(listing: Listing) {
-        val others = _listings.value.filterNot { it.id == listing.id }
-        _listings.value = listOf(listing) + others
+        val current = _listings.value
+        _listings.value = if (current.any { it.id == listing.id }) {
+            current.map { if (it.id == listing.id) listing else it }
+        } else {
+            listOf(listing) + current
+        }
         persist()
     }
 
@@ -66,6 +71,8 @@ class Store(private val context: Context) {
         _settings.value = settings
         persist()
     }
+
+    suspend fun updateSettings(change: (Settings) -> Settings) = saveSettings(change(_settings.value))
 
     /** Copies a picked image into app storage so it survives the picker's temporary grant. */
     suspend fun importPhoto(uri: Uri): String? = withContext(Dispatchers.IO) {
