@@ -73,6 +73,15 @@ export default {
           return json(tokens, tokens.error ? 400 : 200);
         }
 
+        // Token aplikacji (bez użytkownika) — wymagany przez Taxonomy API (kategorie, cechy).
+        case "/ebay/app-token": {
+          const tokens = await tokenRequest(env, hosts, {
+            grant_type: "client_credentials",
+            scope: "https://api.ebay.com/oauth/api_scope",
+          });
+          return json(tokens, tokens.error ? 400 : 200);
+        }
+
         default:
           return new Response("ListOnce", { status: 404 });
       }

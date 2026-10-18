@@ -51,6 +51,12 @@ class EbayClient(private val store: Store) {
     private val sandbox: Boolean get() = account.env == "sandbox"
     private val api: String get() = if (sandbox) "https://api.sandbox.ebay.com" else "https://api.ebay.com"
     private val media: String get() = if (sandbox) "https://apim.sandbox.ebay.com" else "https://apim.ebay.com"
+    private val orders: String get() = if (sandbox) "https://api.sandbox.ebay.com" else "https://apiz.ebay.com"
+
+    // Taxonomy API accepts only an application token; kept in memory until it expires.
+    private var appToken: String = ""
+    private var appTokenExpiresAt: Long = 0
+    private var treeId: String? = null
 
     fun connectUrl(): String = "${store.settings.value.serverUrl}/ebay/auth/start"
 
@@ -104,6 +110,22 @@ class EbayClient(private val store: Store) {
         return access
     }
 
+    private suspend fun applicationToken(): String {
+        if (appToken.isNotEmpty() && appTokenExpiresAt - 120_000 > System.currentTimeMillis()) return appToken
+        val res = send(Request.Builder().url("${store.settings.value.serverUrl}/ebay/app-token").get().build())
+        val obj = res.body as? JsonObject ?: throw EbayException("Serwer nie odpowiedział")
+        appToken = obj.str("access_token")
+            ?: throw EbayException("Brak tokenu aplikacji: ${obj.str("error_description") ?: obj.str("error")}")
+        appTokenExpiresAt = System.currentTimeMillis() +
+            (obj["expires_in"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 7200) * 1000
+        return appToken
+    }
+
+    private suspend fun categoryTree(): String = treeId ?: run {
+        val res = call("GET", "$api/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=EBAY_GB", app = true)
+        ((res as? JsonObject)?.str("categoryTreeId") ?: TREE_GB).also { treeId = it }
+    }
+
     // ---------------------------------------------------------------- account setup
 
     /**
@@ -134,7 +156,7 @@ class EbayClient(private val store: Store) {
         }
 
         val fulfillment = firstPolicy("fulfillment_policy", "fulfillmentPolicies", "fulfillmentPolicyId")
-            ?: createPolicy("fulfillment_policy", "fulfillmentPolicyId", buildJsonObject {
+            ?: createPolicy("fulfillment_policy/", "fulfillmentPolicyId", buildJsonObject {
                 put("name", "ListOnce – Royal Mail 2nd Class")
                 put("marketplaceId", "EBAY_GB")
                 putJsonArray("categoryTypes") { add(buildJsonObject { put("name", "ALL_EXCLUDING_MOTORS_VEHICLES") }) }
@@ -153,7 +175,6 @@ class EbayClient(private val store: Store) {
                         }
                     })
                 }
-                put("localPickup", true)
             })
 
         val payment = firstPolicy("payment_policy", "paymentPolicies", "paymentPolicyId")
@@ -198,8 +219,12 @@ class EbayClient(private val store: Store) {
 
     suspend fun suggestCategories(query: String): List<EbayCategory> {
         if (query.isBlank()) return emptyList()
+        // A bare number is taken as a category id — eBay Sandbox has no category suggestions.
+        query.trim().takeIf { it.all(Char::isDigit) }?.let { id ->
+            return listOf(EbayCategory(id, "Kategoria $id", "wpisana ręcznie"))
+        }
         val q = URLEncoder.encode(query.take(100), "UTF-8")
-        val res = call("GET", "$api/commerce/taxonomy/v1/category_tree/$TREE_GB/get_category_suggestions?q=$q")
+        val res = call("GET", "$api/commerce/taxonomy/v1/category_tree/${categoryTree()}/get_category_suggestions?q=$q", app = true)
         return res?.jsonObject?.get("categorySuggestions")?.jsonArray.orEmpty().mapNotNull { s ->
             val cat = s.jsonObject["category"]?.jsonObject ?: return@mapNotNull null
             val ancestors = s.jsonObject["categoryTreeNodeAncestors"]?.jsonArray.orEmpty()
@@ -211,7 +236,8 @@ class EbayClient(private val store: Store) {
 
     suspend fun categoryInfo(categoryId: String): CategoryInfo {
         val aspectsRes = call("GET",
-            "$api/commerce/taxonomy/v1/category_tree/$TREE_GB/get_item_aspects_for_category?category_id=$categoryId")
+            "$api/commerce/taxonomy/v1/category_tree/${categoryTree()}/get_item_aspects_for_category?category_id=$categoryId",
+            app = true)
         val aspects = aspectsRes?.jsonObject?.get("aspects")?.jsonArray.orEmpty().mapNotNull { a ->
             val o = a.jsonObject
             val name = o.str("localizedAspectName") ?: return@mapNotNull null
@@ -225,7 +251,7 @@ class EbayClient(private val store: Store) {
         }
 
         val condRes = call("GET",
-            "$api/sell/metadata/v1/marketplace/EBAY_GB/get_item_condition_policies?filter=categoryIds:%7B$categoryId%7D")
+            "$api/sell/metadata/v1/marketplace/EBAY_GB/get_item_condition_policies?filter=categoryIds%3A%7B$categoryId%7D")
         val conditions = condRes?.jsonObject?.get("itemConditionPolicies")?.jsonArray?.firstOrNull()
             ?.jsonObject?.get("itemConditions")?.jsonArray.orEmpty().mapNotNull { c ->
                 val id = c.jsonObject.str("conditionId") ?: return@mapNotNull null
@@ -348,7 +374,7 @@ class EbayClient(private val store: Store) {
             .withZone(java.time.ZoneOffset.UTC)
             .format(java.time.Instant.now().minus(java.time.Duration.ofDays(30)))
         val filter = URLEncoder.encode("creationdate:[$since..]", "UTF-8")
-        val res = call("GET", "$api/sell/fulfillment/v1/order?filter=$filter&limit=200")
+        val res = call("GET", "$orders/sell/fulfillment/v1/order?filter=$filter&limit=200")
         return res?.jsonObject?.get("orders")?.jsonArray.orEmpty()
             .flatMap { it.jsonObject["lineItems"]?.jsonArray.orEmpty() }
             .mapNotNull { it.jsonObject.str("legacyItemId") }
@@ -379,7 +405,12 @@ class EbayClient(private val store: Store) {
 
     private class Res(val code: Int, val body: JsonElement?, val location: String?, val raw: String)
 
-    private suspend fun call(method: String, url: String, body: JsonElement? = null): JsonElement? {
+    private suspend fun call(
+        method: String,
+        url: String,
+        body: JsonElement? = null,
+        app: Boolean = false,
+    ): JsonElement? {
         val reqBody = when {
             body != null -> body.toString().toRequestBody(jsonType)
             method == "POST" || method == "PUT" -> "".toRequestBody(jsonType)
@@ -389,7 +420,7 @@ class EbayClient(private val store: Store) {
             Request.Builder()
                 .url(url)
                 .method(method, reqBody)
-                .header("Authorization", "Bearer ${token()}")
+                .header("Authorization", "Bearer ${if (app) applicationToken() else token()}")
                 .header("Content-Language", "en-GB")
                 .header("Accept-Language", "en-GB")
                 .header("X-EBAY-C-MARKETPLACE-ID", "EBAY_GB")
